@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>NL PR Waiting Times</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="How long the IND takes to decide on Dutch permanent residence applications, collected from people's own reports.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f7f8fa;
+      --surface: #ffffff;
+      --surface-2: #f0f2f5;
+      --border: #e2e5ea;
+      --text: #14181f;
+      --text-dim: #5b6472;
+      --accent: #0891b2;
+      --yes: #15803d;
+      --yes-bg: #dcfce7;
+      --no: #b91c1c;
+      --no-bg: #fee2e2;
+      --radius: 12px;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0a0e14;
+        --surface: #10151d;
+        --surface-2: #151b26;
+        --border: #212938;
+        --text: #e6edf3;
+        --text-dim: #8b98a8;
+        --accent: #22d3ee;
+        --yes: #4ade80;
+        --yes-bg: rgba(74, 222, 128, 0.12);
+        --no: #f87171;
+        --no-bg: rgba(248, 113, 113, 0.12);
+        color-scheme: dark;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #0a0e14;
+      --surface: #10151d;
+      --surface-2: #151b26;
+      --border: #212938;
+      --text: #e6edf3;
+      --text-dim: #8b98a8;
+      --accent: #22d3ee;
+      --yes: #4ade80;
+      --yes-bg: rgba(74, 222, 128, 0.12);
+      --no: #f87171;
+      --no-bg: rgba(248, 113, 113, 0.12);
+      color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.55;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 20px 0 8px;
+    }
+
+    .lang {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface);
+      padding: 3px;
+    }
+    .lang button {
+      font: 600 0.8rem 'Inter', sans-serif;
+      border: 0;
+      background: transparent;
+      color: var(--text-dim);
+      padding: 6px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .lang button[aria-pressed="true"] { background: var(--accent); color: var(--bg); }
+
+    h1 { font-size: clamp(1.7rem, 4.5vw, 2.4rem); line-height: 1.15; margin: 28px 0 10px; letter-spacing: -0.02em; }
+    .lead { color: var(--text-dim); max-width: 62ch; margin: 0 0 28px; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    @media (min-width: 720px) { .stats { grid-template-columns: repeat(3, 1fr); } }
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+    .stat .label { font-size: 0.78rem; color: var(--text-dim); }
+    .stat .value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow-x: auto;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    tbody tr:last-child td { border-bottom: 0; }
+    th {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-dim);
+      background: var(--surface-2);
+      cursor: pointer;
+      user-select: none;
+    }
+    th[aria-sort="ascending"]::after { content: " ▲"; }
+    th[aria-sort="descending"]::after { content: " ▼"; }
+    td { font-variant-numeric: tabular-nums; }
+    td.pending { color: var(--text-dim); font-style: italic; }
+    .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 600; font-size: 0.8rem; }
+    .pill.yes { color: var(--yes); background: var(--yes-bg); }
+    .pill.no { color: var(--no); background: var(--no-bg); }
+    .src { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+    .src::after { content: " ↗"; text-decoration: none; display: inline-block; margin-left: 2px; }
+    .src:hover { text-decoration-thickness: 2px; }
+
+    .filters { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-bottom: 12px; font-size: 0.85rem; color: var(--text-dim); }
+    .filter-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      font: 500 0.82rem 'Inter', sans-serif;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 5px 12px;
+      cursor: pointer;
+    }
+    .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+    .count { font-size: 0.82rem; color: var(--text-dim); margin: 0 0 10px; }
+    .sort-bar { display: none; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 0.85rem; color: var(--text-dim); }
+    .sort-bar select {
+      font: 500 0.85rem 'Inter', sans-serif;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 8px;
+    }
+
+    /* Phones: each row becomes a card, no sideways scrolling */
+    @media (max-width: 640px) {
+      .sort-bar { display: flex; }
+      .table-card { overflow: visible; }
+      table, tbody, tr, td { display: block; width: 100%; }
+      thead { display: none; }
+      tbody tr { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+      tbody tr:last-child { border-bottom: 0; }
+      td {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 16px;
+        padding: 4px 0;
+        border: 0;
+        white-space: normal;
+        text-align: right;
+      }
+      td::before { content: attr(data-label); color: var(--text-dim); font-size: 0.78rem; text-align: left; flex-shrink: 0; }
+      td.empty { display: block; text-align: center; }
+      td.empty::before { content: none; }
+      td.pending::before { font-style: normal; }
+    }
+    .empty { padding: 32px 16px; text-align: center; color: var(--text-dim); }
+
+    footer { color: var(--text-dim); font-size: 0.82rem; padding: 28px 0 40px; }
+    footer a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="lang" role="group" aria-label="Language">
+        <button type="button" data-lang="en">EN</button>
+        <button type="button" data-lang="tr">TR</button>
+      </div>
+    </header>
+
+    <main>
+      <h1 data-i18n="title"></h1>
+      <p class="lead" data-i18n="lead"></p>
+
+      <section class="stats" id="stats"></section>
+
+      <div class="filters">
+        <div class="filter-group" data-filter="timing">
+          <span data-i18n="colTiming"></span>
+          <button type="button" class="chip" data-value="before" data-i18n="before"></button>
+          <button type="button" class="chip" data-value="after" data-i18n="after"></button>
+        </div>
+        <div class="filter-group" data-filter="success">
+          <span data-i18n="colSuccess"></span>
+          <button type="button" class="chip" data-value="yes" data-i18n="yes"></button>
+          <button type="button" class="chip" data-value="no" data-i18n="no"></button>
+        </div>
+      </div>
+      <p class="count" id="count"></p>
+
+      <label class="sort-bar"><span data-i18n="sortBy"></span>
+        <select id="sort-select">
+          <option value="submitted:-1" data-i18n="sortNewest"></option>
+          <option value="submitted:1" data-i18n="sortOldest"></option>
+          <option value="decided:-1" data-i18n="sortDecided"></option>
+        </select>
+      </label>
+
+      <div class="table-card">
+        <table>
+          <thead>
+            <tr>
+              <th data-key="submitted" data-i18n="colSubmitted"></th>
+              <th data-key="timing" data-i18n="colTiming"></th>
+              <th data-key="decided" data-i18n="colDecided"></th>
+              <th data-key="success" data-i18n="colSuccess"></th>
+              <th data-key="source" data-i18n="colSource"></th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </main>
+
+    <footer>
+      <p data-i18n="footerSource"></p>
+      <p><span data-i18n="updated"></span> <span id="updated">—</span></p>
+    </footer>
+  </div>
+
+  <script>
+    const I18N = {
+      en: {
+        title: "Dutch permanent residence: how long does the IND take?",
+        lead: "Application and decision dates shared by people in a Reddit thread on r/Netherlands. Self-reported, so treat it as a rough guide, not official figures.",
+        colSubmitted: "Application submitted on",
+        colTiming: "Before/after 5 years",
+        colDecided: "Decision made on",
+        colSuccess: "Success",
+        colSource: "Source",
+        before: "before",
+        after: "after",
+        on: "on the 5-year mark",
+        approx: "about",
+        yes: "yes",
+        no: "no",
+        pending: "waiting",
+        statReports: "Reports",
+        statMedian: "Average wait",
+        statMedianBefore: "Average wait, applied before 5 years",
+        statMedianAfter: "Average wait, applied after 5 years",
+        sortBy: "Sort by",
+        sortNewest: "Newest application",
+        sortOldest: "Oldest application",
+        sortDecided: "Latest decision",
+        statApproved: "Approved",
+        statWaiting: "Still waiting",
+        days: n => `${n} days`,
+        timingDetail: (dur, approx) => `${approx ? "about " : ""}${dur}`,
+        units: { day: ["day", "days"], week: ["week", "weeks"], month: ["month", "months"], year: ["year", "years"] },
+        comment: "comment",
+        empty: "No matching entries.",
+        showing: (n, total) => `Showing ${n} of ${total}`,
+        footerSource: "Source: comments in the r/Netherlands thread. Dates are as people wrote them; where only a month was given, only the month is shown. A missing year was taken from the comment's date, and obvious year typos were corrected. A blank success cell means the person reported a decision but not the outcome. \"Waiting\" rows are recent comments with no decision yet.",
+        updated: "Last updated:"
+      },
+      tr: {
+        title: "Hollanda kalıcı oturum: IND ne kadar sürede karar veriyor?",
+        lead: "r/Netherlands'teki bir Reddit başlığında insanların paylaştığı başvuru ve karar tarihleri. Kişilerin kendi beyanları; resmi rakam değil, kabaca fikir vermesi için.",
+        colSubmitted: "Başvuru tarihi",
+        colTiming: "5 yıldan önce/sonra",
+        colDecided: "Karar tarihi",
+        colSuccess: "Sonuç",
+        colSource: "Kaynak",
+        before: "önce",
+        after: "sonra",
+        on: "5. yılın dolduğu gün",
+        approx: "yaklaşık",
+        yes: "evet",
+        no: "hayır",
+        pending: "bekliyor",
+        statReports: "Kayıt",
+        statMedian: "Ortalama bekleme süresi",
+        statMedianBefore: "Ortalama bekleme süresi, 5 yıldan önce başvuranlar",
+        statMedianAfter: "Ortalama bekleme süresi, 5 yıldan sonra başvuranlar",
+        sortBy: "Sırala",
+        sortNewest: "En yeni başvuru",
+        sortOldest: "En eski başvuru",
+        sortDecided: "En yeni karar",
+        statApproved: "Onaylanan",
+        statWaiting: "Hâlâ bekleyen",
+        days: n => `${n} gün`,
+        timingDetail: (dur, approx) => `${approx ? "yaklaşık " : ""}${dur}`,
+        units: { day: ["gün", "gün"], week: ["hafta", "hafta"], month: ["ay", "ay"], year: ["yıl", "yıl"] },
+        comment: "yorum",
+        empty: "Eşleşen kayıt yok.",
+        showing: (n, total) => `${total} kayıttan ${n} tanesi gösteriliyor`,
+        footerSource: "Kaynak: r/Netherlands başlığındaki yorumlar. Tarihler kişilerin yazdığı gibidir; sadece ay verilmişse sadece ay gösterilir. Yılı yazılmamış tarihlerde yıl yorumun tarihinden alındı, bariz yıl hataları düzeltildi. Sonuç hücresi boşsa kişi karar çıktığını yazmış ama sonucu belirtmemiştir. \"Bekliyor\" satırları henüz karar almamış yeni yorumlardır.",
+        updated: "Son güncelleme:"
+      }
+    };
+
+    let lang = "en";
+    let data = { updated: null, thread: null, entries: [] };
+    let sort = { key: "submitted", dir: -1 };
+    // Clicking a chip filters by it; clicking it again clears the filter.
+    const filters = { timing: null, success: null };
+
+    try {
+      const saved = localStorage.getItem("lang");
+      if (saved === "en" || saved === "tr") lang = saved;
+      else if ((navigator.language || "").toLowerCase().startsWith("tr")) lang = "tr";
+    } catch (e) {}
+
+    const t = k => I18N[lang][k];
+    const locale = () => (lang === "tr" ? "tr-TR" : "en-GB");
+    function fmtNum(n) { return Number(n).toLocaleString(locale()); }
+    function unitName(unit, amount) { const u = t("units")[unit] || [unit, unit]; return Number(amount) === 1 ? u[0] : u[1]; }
+
+    // Dates are "YYYY-MM-DD" or "YYYY-MM" (when only the month was given).
+    function fmtDate(s) {
+      if (!s) return null;
+      const [y, m, d] = s.split("-").map(Number);
+      const date = new Date(Date.UTC(y, m - 1, d || 1));
+      const opts = d ? { day: "numeric", month: "long", year: "numeric" } : { month: "long", year: "numeric" };
+      return date.toLocaleDateString(locale(), { ...opts, timeZone: "UTC" });
+    }
+    function toTime(s) {
+      if (!s) return null;
+      const [y, m, d] = s.split("-").map(Number);
+      return Date.UTC(y, m - 1, d || 15);
+    }
+    function waitDays(e) {
+      if (!e.submitted || !e.decided) return null;
+      return Math.round((toTime(e.decided) - toTime(e.submitted)) / 86400000);
+    }
+    function timingText(e) {
+      if (!e.timing) return "—";
+      const side = t(e.timing);
+      if (e.timing === "on" || !e.amount) return side;
+      const dur = e.amount.map(([n, unit]) => `${fmtNum(n)} ${unitName(unit, n)}`).join(" ");
+      return `${side} - ${t("timingDetail")(dur, e.approx)}`;
+    }
+    function average(list) {
+      const w = list.map(waitDays).filter(x => x != null);
+      return w.length ? Math.round(w.reduce((a, b) => a + b, 0) / w.length) : null;
+    }
+
+    function render() {
+      document.documentElement.lang = lang;
+      document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
+      document.querySelectorAll(".lang button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+      document.getElementById("sort-select").value = `${sort.key}:${sort.dir}`;
+      document.querySelectorAll("th[data-key]").forEach(th => {
+        th.setAttribute("aria-sort", th.dataset.key === sort.key ? (sort.dir > 0 ? "ascending" : "descending") : "none");
+      });
+
+      document.querySelectorAll(".filter-group").forEach(g => g.querySelectorAll(".chip").forEach(c =>
+        c.setAttribute("aria-pressed", String(filters[g.dataset.filter] === c.dataset.value))));
+      const shown = data.entries.filter(e =>
+        (!filters.timing || (filters.timing === "before" ? e.timing === "before" : e.timing === "after" || e.timing === "on")) &&
+        (!filters.success || e.success === (filters.success === "yes")));
+      document.getElementById("count").textContent = t("showing")(shown.length, data.entries.length);
+      const entries = shown.sort((a, b) => {
+        const val = e => sort.key === "submitted" || sort.key === "decided" ? toTime(e[sort.key])
+          : sort.key === "success" ? (e.success == null ? 2 : e.success ? 0 : 1)
+          : sort.key === "timing" ? (e.timing || "")
+          : (e.author || "");
+        const va = val(a), vb = val(b);
+        if (va == null) return 1;
+        if (vb == null) return -1;
+        return va < vb ? -sort.dir : va > vb ? sort.dir : 0;
+      });
+
+      const tbody = document.getElementById("rows");
+      tbody.textContent = "";
+      if (!entries.length) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 5; td.className = "empty"; td.textContent = t("empty");
+        tr.append(td); tbody.append(tr);
+      }
+      for (const e of entries) {
+        const tr = document.createElement("tr");
+        const labels = ["colSubmitted", "colTiming", "colDecided", "colSuccess", "colSource"];
+        const cell = (text, cls) => {
+          const td = document.createElement("td"); td.textContent = text; if (cls) td.className = cls;
+          td.dataset.label = t(labels[tr.children.length]); tr.append(td); return td;
+        };
+        cell(fmtDate(e.submitted) || "—");
+        cell(timingText(e));
+        const decided = fmtDate(e.decided);
+        cell(decided || t("pending"), decided ? "" : "pending");
+        const s = cell("");
+        if (e.success != null) {
+          const pill = document.createElement("span");
+          pill.className = "pill " + (e.success ? "yes" : "no");
+          pill.textContent = t(e.success ? "yes" : "no");
+          s.append(pill);
+        } else { s.textContent = "—"; }
+        const src = cell("");
+        if (e.id && data.thread) {
+          const a = document.createElement("a");
+          a.href = data.thread + "comment/" + e.id + "/"; a.className = "src"; a.target = "_blank"; a.rel = "noopener";
+          a.textContent = e.author ? "u/" + e.author : t("comment");
+          src.append(a);
+        } else { src.textContent = "—"; }
+        tbody.append(tr);
+      }
+
+      const fmtMed = m => (m == null ? "—" : t("days")(m));
+      const decidedN = data.entries.filter(e => e.success != null).length;
+      const approved = data.entries.filter(e => e.success === true).length;
+      const stats = [
+        [t("statReports"), fmtNum(data.entries.length)],
+        [t("statMedian"), fmtMed(average(data.entries))],
+        [t("statMedianBefore"), fmtMed(average(data.entries.filter(e => e.timing === "before")))],
+        [t("statMedianAfter"), fmtMed(average(data.entries.filter(e => e.timing === "after" || e.timing === "on")))],
+        [t("statApproved"), decidedN ? `${approved}/${decidedN}` : "—"],
+        [t("statWaiting"), fmtNum(data.entries.filter(e => !e.decided).length)]
+      ];
+      const box = document.getElementById("stats");
+      box.textContent = "";
+      for (const [label, value] of stats) {
+        const d = document.createElement("div"); d.className = "stat";
+        const l = document.createElement("div"); l.className = "label"; l.textContent = label;
+        const v = document.createElement("div"); v.className = "value"; v.textContent = value;
+        d.append(l, v); box.append(d);
+      }
+      document.getElementById("updated").textContent = fmtDate(data.updated) || "—";
+    }
+
+    document.querySelectorAll(".lang button").forEach(b => b.addEventListener("click", () => {
+      lang = b.dataset.lang;
+      try { localStorage.setItem("lang", lang); } catch (e) {}
+      render();
+    }));
+    document.querySelectorAll("th[data-key]").forEach(th => th.addEventListener("click", () => {
+      sort = { key: th.dataset.key, dir: sort.key === th.dataset.key ? -sort.dir : 1 };
+      render();
+    }));
+
+    document.querySelectorAll(".filter-group").forEach(g => g.querySelectorAll(".chip").forEach(c =>
+      c.addEventListener("click", () => {
+        const k = g.dataset.filter;
+        filters[k] = filters[k] === c.dataset.value ? null : c.dataset.value;
+        render();
+      })));
+    document.getElementById("sort-select").addEventListener("change", ev => {
+      const [key, dir] = ev.target.value.split(":");
+      sort = { key, dir: Number(dir) };
+      render();
+    });
+
+    render();
+    fetch("data.json", { cache: "no-store" })
+      .then(r => r.json())
+      .then(d => { data = d; render(); })
+      .catch(() => render());
+  </script>
+</body>
+</html>
