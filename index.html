@@ -139,6 +139,19 @@
     .src::after { content: " ↗"; text-decoration: none; display: inline-block; margin-left: 2px; }
     .src:hover { text-decoration-thickness: 2px; }
 
+    .filters { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-bottom: 12px; font-size: 0.85rem; color: var(--text-dim); }
+    .filter-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      font: 500 0.82rem 'Inter', sans-serif;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 5px 12px;
+      cursor: pointer;
+    }
+    .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+    .count { font-size: 0.82rem; color: var(--text-dim); margin: 0 0 10px; }
     .sort-bar { display: none; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 0.85rem; color: var(--text-dim); }
     .sort-bar select {
       font: 500 0.85rem 'Inter', sans-serif;
@@ -192,6 +205,20 @@
       <p class="lead" data-i18n="lead"></p>
 
       <section class="stats" id="stats"></section>
+
+      <div class="filters">
+        <div class="filter-group" data-filter="timing">
+          <span data-i18n="colTiming"></span>
+          <button type="button" class="chip" data-value="before" data-i18n="before"></button>
+          <button type="button" class="chip" data-value="after" data-i18n="after"></button>
+        </div>
+        <div class="filter-group" data-filter="success">
+          <span data-i18n="colSuccess"></span>
+          <button type="button" class="chip" data-value="yes" data-i18n="yes"></button>
+          <button type="button" class="chip" data-value="no" data-i18n="no"></button>
+        </div>
+      </div>
+      <p class="count" id="count"></p>
 
       <label class="sort-bar"><span data-i18n="sortBy"></span>
         <select id="sort-select">
@@ -254,7 +281,8 @@
         timingDetail: (dur, approx) => `${approx ? "about " : ""}${dur}`,
         units: { day: ["day", "days"], week: ["week", "weeks"], month: ["month", "months"], year: ["year", "years"] },
         comment: "comment",
-        empty: "No data yet.",
+        empty: "No matching entries.",
+        showing: (n, total) => `Showing ${n} of ${total}`,
         footerSource: "Source: comments in the r/Netherlands thread. Dates are as people wrote them; where only a month was given, only the month is shown. A missing year was taken from the comment's date, and obvious year typos were corrected. A blank success cell means the person reported a decision but not the outcome. \"Waiting\" rows are recent comments with no decision yet.",
         updated: "Last updated:"
       },
@@ -287,7 +315,8 @@
         timingDetail: (dur, approx) => `${approx ? "yaklaşık " : ""}${dur}`,
         units: { day: ["gün", "gün"], week: ["hafta", "hafta"], month: ["ay", "ay"], year: ["yıl", "yıl"] },
         comment: "yorum",
-        empty: "Henüz veri yok.",
+        empty: "Eşleşen kayıt yok.",
+        showing: (n, total) => `${total} kayıttan ${n} tanesi gösteriliyor`,
         footerSource: "Kaynak: r/Netherlands başlığındaki yorumlar. Tarihler kişilerin yazdığı gibidir; sadece ay verilmişse sadece ay gösterilir. Yılı yazılmamış tarihlerde yıl yorumun tarihinden alındı, bariz yıl hataları düzeltildi. Sonuç hücresi boşsa kişi karar çıktığını yazmış ama sonucu belirtmemiştir. \"Bekliyor\" satırları henüz karar almamış yeni yorumlardır.",
         updated: "Son güncelleme:"
       }
@@ -296,6 +325,8 @@
     let lang = "en";
     let data = { updated: null, thread: null, entries: [] };
     let sort = { key: "submitted", dir: -1 };
+    // Clicking a chip filters by it; clicking it again clears the filter.
+    const filters = { timing: null, success: null };
 
     try {
       const saved = localStorage.getItem("lang");
@@ -346,7 +377,13 @@
         th.setAttribute("aria-sort", th.dataset.key === sort.key ? (sort.dir > 0 ? "ascending" : "descending") : "none");
       });
 
-      const entries = [...data.entries].sort((a, b) => {
+      document.querySelectorAll(".filter-group").forEach(g => g.querySelectorAll(".chip").forEach(c =>
+        c.setAttribute("aria-pressed", String(filters[g.dataset.filter] === c.dataset.value))));
+      const shown = data.entries.filter(e =>
+        (!filters.timing || (filters.timing === "before" ? e.timing === "before" : e.timing === "after" || e.timing === "on")) &&
+        (!filters.success || e.success === (filters.success === "yes")));
+      document.getElementById("count").textContent = t("showing")(shown.length, data.entries.length);
+      const entries = shown.sort((a, b) => {
         const val = e => sort.key === "submitted" || sort.key === "decided" ? toTime(e[sort.key])
           : sort.key === "success" ? (e.success == null ? 2 : e.success ? 0 : 1)
           : sort.key === "timing" ? (e.timing || "")
@@ -425,6 +462,12 @@
       render();
     }));
 
+    document.querySelectorAll(".filter-group").forEach(g => g.querySelectorAll(".chip").forEach(c =>
+      c.addEventListener("click", () => {
+        const k = g.dataset.filter;
+        filters[k] = filters[k] === c.dataset.value ? null : c.dataset.value;
+        render();
+      })));
     document.getElementById("sort-select").addEventListener("change", ev => {
       const [key, dir] = ev.target.value.split(":");
       sort = { key, dir: Number(dir) };
