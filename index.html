@@ -423,7 +423,7 @@
         const src = cell("");
         if (e.id && data.thread) {
           const a = document.createElement("a");
-          a.href = data.thread + "comment/" + e.id + "/"; a.className = "src"; a.target = "_blank"; a.rel = "noopener";
+          a.href = data.thread + e.id + "/"; a.className = "src"; a.target = "_blank"; a.rel = "noopener";
           a.textContent = e.author ? "u/" + e.author : t("comment");
           src.append(a);
         } else { src.textContent = "—"; }
