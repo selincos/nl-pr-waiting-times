@@ -98,10 +98,11 @@
 
     .stats {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      grid-template-columns: repeat(2, 1fr);
       gap: 12px;
       margin-bottom: 28px;
     }
+    @media (min-width: 720px) { .stats { grid-template-columns: repeat(3, 1fr); } }
     .stat {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -117,8 +118,8 @@
       border-radius: var(--radius);
       overflow-x: auto;
     }
-    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
-    th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
     tbody tr:last-child td { border-bottom: 0; }
     th {
       font-size: 0.75rem;
@@ -195,18 +196,23 @@
         colSource: "Source",
         before: "before",
         after: "after",
+        on: "on the 5-year mark",
+        approx: "about",
         yes: "yes",
         no: "no",
         pending: "waiting",
         statReports: "Reports",
         statMedian: "Median wait",
+        statMedianBefore: "Median wait, applied before 5 years",
+        statMedianAfter: "Median wait, applied after 5 years",
         statApproved: "Approved",
+        statWaiting: "Still waiting",
         days: n => `${n} days`,
-        timingDetail: (amount, unit, side) => `${fmtNum(amount)} ${unitName(unit, amount)} ${side}`,
+        timingDetail: (dur, side, approx) => `${approx ? "about " : ""}${dur} ${side}`,
         units: { day: ["day", "days"], week: ["week", "weeks"], month: ["month", "months"], year: ["year", "years"] },
         comment: "comment",
         empty: "No data yet.",
-        footerSource: "Source: comments in the r/Netherlands thread. Dates are as people wrote them; where only a month was given, only the month is shown.",
+        footerSource: "Source: comments in the r/Netherlands thread. Dates are as people wrote them; where only a month was given, only the month is shown. A missing year was taken from the comment's date, and obvious year typos were corrected. A blank success cell means the person reported a decision but not the outcome. \"Waiting\" rows are recent comments with no decision yet.",
         updated: "Last updated:"
       },
       tr: {
@@ -219,25 +225,30 @@
         colSource: "Kaynak",
         before: "önce",
         after: "sonra",
+        on: "5. yılın dolduğu gün",
+        approx: "yaklaşık",
         yes: "evet",
         no: "hayır",
         pending: "bekliyor",
         statReports: "Kayıt",
         statMedian: "Ortanca bekleme",
+        statMedianBefore: "Ortanca bekleme, 5 yıldan önce başvuranlar",
+        statMedianAfter: "Ortanca bekleme, 5 yıldan sonra başvuranlar",
         statApproved: "Onaylanan",
+        statWaiting: "Hâlâ bekleyen",
         days: n => `${n} gün`,
-        timingDetail: (amount, unit, side) => `${fmtNum(amount)} ${unitName(unit, amount)} ${side}`,
+        timingDetail: (dur, side, approx) => `${approx ? "yaklaşık " : ""}${dur} ${side}`,
         units: { day: ["gün", "gün"], week: ["hafta", "hafta"], month: ["ay", "ay"], year: ["yıl", "yıl"] },
         comment: "yorum",
         empty: "Henüz veri yok.",
-        footerSource: "Kaynak: r/Netherlands başlığındaki yorumlar. Tarihler kişilerin yazdığı gibidir; sadece ay verilmişse sadece ay gösterilir.",
+        footerSource: "Kaynak: r/Netherlands başlığındaki yorumlar. Tarihler kişilerin yazdığı gibidir; sadece ay verilmişse sadece ay gösterilir. Yılı yazılmamış tarihlerde yıl yorumun tarihinden alındı, bariz yıl hataları düzeltildi. Sonuç hücresi boşsa kişi karar çıktığını yazmış ama sonucu belirtmemiştir. \"Bekliyor\" satırları henüz karar almamış yeni yorumlardır.",
         updated: "Son güncelleme:"
       }
     };
 
     let lang = "en";
     let data = { updated: null, thread: null, entries: [] };
-    let sort = { key: "submitted", dir: 1 };
+    let sort = { key: "submitted", dir: -1 };
 
     try {
       const saved = localStorage.getItem("lang");
@@ -270,8 +281,14 @@
     function timingText(e) {
       if (!e.timing) return "—";
       const side = t(e.timing);
-      if (e.timingAmount == null) return side;
-      return `${side}, ${t("timingDetail")(e.timingAmount, e.timingUnit, side)}`;
+      if (e.timing === "on" || !e.amount) return side;
+      const dur = e.amount.map(([n, unit]) => `${fmtNum(n)} ${unitName(unit, n)}`).join(" ");
+      return `${side}, ${t("timingDetail")(dur, side, e.approx)}`;
+    }
+    function median(list) {
+      const w = list.map(waitDays).filter(x => x != null).sort((a, b) => a - b);
+      if (!w.length) return null;
+      return w.length % 2 ? w[(w.length - 1) / 2] : Math.round((w[w.length / 2 - 1] + w[w.length / 2]) / 2);
     }
 
     function render() {
@@ -286,7 +303,7 @@
         const val = e => sort.key === "submitted" || sort.key === "decided" ? toTime(e[sort.key])
           : sort.key === "success" ? (e.success == null ? 2 : e.success ? 0 : 1)
           : sort.key === "timing" ? (e.timing || "")
-          : (e.source || "");
+          : (e.author || "");
         const va = val(a), vb = val(b);
         if (va == null) return 1;
         if (vb == null) return -1;
@@ -316,23 +333,25 @@
           s.append(pill);
         } else { s.textContent = "—"; }
         const src = cell("");
-        if (e.source) {
+        if (e.id && data.thread) {
           const a = document.createElement("a");
-          a.href = e.source; a.className = "src"; a.target = "_blank"; a.rel = "noopener";
+          a.href = data.thread + "comment/" + e.id + "/"; a.className = "src"; a.target = "_blank"; a.rel = "noopener";
           a.textContent = e.author ? "u/" + e.author : t("comment");
           src.append(a);
         } else { src.textContent = "—"; }
         tbody.append(tr);
       }
 
-      const waits = data.entries.map(waitDays).filter(w => w != null).sort((a, b) => a - b);
-      const median = waits.length ? (waits.length % 2 ? waits[(waits.length - 1) / 2] : Math.round((waits[waits.length / 2 - 1] + waits[waits.length / 2]) / 2)) : null;
+      const fmtMed = m => (m == null ? "—" : t("days")(m));
       const decidedN = data.entries.filter(e => e.success != null).length;
       const approved = data.entries.filter(e => e.success === true).length;
       const stats = [
         [t("statReports"), fmtNum(data.entries.length)],
-        [t("statMedian"), median == null ? "—" : t("days")(median)],
-        [t("statApproved"), decidedN ? `${approved}/${decidedN}` : "—"]
+        [t("statMedian"), fmtMed(median(data.entries))],
+        [t("statMedianBefore"), fmtMed(median(data.entries.filter(e => e.timing === "before")))],
+        [t("statMedianAfter"), fmtMed(median(data.entries.filter(e => e.timing === "after" || e.timing === "on")))],
+        [t("statApproved"), decidedN ? `${approved}/${decidedN}` : "—"],
+        [t("statWaiting"), fmtNum(data.entries.filter(e => !e.decided).length)]
       ];
       const box = document.getElementById("stats");
       box.textContent = "";
